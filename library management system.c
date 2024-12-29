@@ -12,8 +12,10 @@ void Displaybook();
 void Author();
 void Stock();
 void Issue();
-void bookret();
+void bookReturn();
 void Addmembr();
+void DisplayIssuedBooks();
+void ShowBooksIssuedByMember();
 void Exit();
 
 char info[500];
@@ -50,7 +52,7 @@ int main()
     printf("\n\t\t---Library Management System by rana zaeem  ---\n");
     do
     {
-        printf("\n\t--MENU--\n \n 1. Add A New Book\n 2. Search a book \n 3. Display Complete Information\n 4. Display All Books of An Author\n 5. List Count of Books (Issued & On Stock)\n 6. To Issue a Book \n 7. To Return a Book \n 8. Add A New Member\n 9.Exit the program\n\n\t Enter your choice <1-9>: ");
+        printf("\n\t--MENU--\n \n 1. Add A New Book\n 2. Search a book \n 3. Display Complete Information\n 4. Display All Books of An Author\n 5. List Count of Books (Issued & On Stock)\n 6. To Issue a Book \n 7. To Return a Book \n 8. Add A New Member\n 9. Display all Issue book Member\n  10.Exit the program\n\n\t Enter your choice <1-9>: ");
         if (scanf("%d", &choice) != 1)
         {
             printf("! Invalid input. Please enter a number between 1 and 9.\n");
@@ -77,12 +79,15 @@ int main()
             Issue();
             break;
         case 7:
-            bookret();
+            bookReturn();
             break;
         case 8:
             Addmembr();
             break;
         case 9:
+            DisplayIssuedBooks();
+            break;
+        case 10:
             Exit();
         default:
             printf(" ! Invalid Input...\n");
@@ -345,13 +350,17 @@ void Addmembr()
 void Issue()
 {
     int mid, Found1 = 0, Found2 = 0;
-    char issubookname[25]; // Increased size for book name
+    char issubookname[25]; // Book name for issuing
 
-    // Get member ID
+    // Get Member ID
     printf("\nEnter The User ID of the Member:\n");
-    scanf("%d", &mid);
+    if (scanf("%d", &mid) != 1)
+    {
+        printf("! Invalid input for User ID.\n");
+        return;
+    }
 
-    // Check if member exists and has available cards
+    // Check if the member exists
     membrrecord = fopen("membrrecord.txt", "r");
     if (membrrecord == NULL)
     {
@@ -359,7 +368,6 @@ void Issue()
         return;
     }
 
-    // Search for member
     while (fscanf(membrrecord, "%d %s %s %d %d",
                   &membr.mid, membr.mname, membr.department, &membr.phno, &membr.availibcard) == 5)
     {
@@ -383,11 +391,15 @@ void Issue()
         return;
     }
 
-    // Get book name to issue
+    // Get Book Name
     printf("\nEnter The Name of Book:\n");
-    scanf(" %[^\n]", issubookname); // Allow spaces in book name
+    if (scanf(" %[^\n]", issubookname) != 1)
+    {
+        printf("! Invalid input for Book Name.\n");
+        return;
+    }
 
-    // Check if book exists and is available
+    // Check if the book exists
     librecord = fopen("librecord.txt", "r");
     if (librecord == NULL)
     {
@@ -395,7 +407,6 @@ void Issue()
         return;
     }
 
-    // Search for book
     while (fscanf(librecord, "%d %s %s %d",
                   &book.bid, book.bname, book.author, &book.status) == 4)
     {
@@ -419,8 +430,9 @@ void Issue()
         return;
     }
 
-    // Update member record
-    FILE *tempMembr = fopen("fp2.txt", "w");
+    FILE *tempMembr;
+    // Update Member Record
+    tempMembr = fopen("fp2.txt", "w");
     if (tempMembr == NULL)
     {
         printf("! Error creating temporary member file.\n");
@@ -433,7 +445,7 @@ void Issue()
     {
         if (mid == membr.mid)
         {
-            membr.availibcard--; // Decrease available cards
+            membr.availibcard--;
         }
         fprintf(tempMembr, "%d\t%s\t%s\t%d\t%d\n",
                 membr.mid, membr.mname, membr.department, membr.phno, membr.availibcard);
@@ -441,28 +453,43 @@ void Issue()
     fclose(membrrecord);
     fclose(tempMembr);
 
-    // Update library record
-    FILE *tempLib = fopen("fp1.txt", "w");
+    FILE *tempLib;
+    // Update Library Record
+    tempLib = fopen("fp1.txt", "w");
     if (tempLib == NULL)
     {
         printf("! Error creating temporary library file.\n");
-        remove("fp2.txt"); // Clean up the first temporary file
+        remove("fp2.txt"); // Clean up first temporary file
         return;
     }
 
     librecord = fopen("librecord.txt", "r");
+    FILE *issuedBooks = fopen("issuedbooks.txt", "a");
+    if (issuedBooks == NULL)
+    {
+        printf("! Error: Could not open issued books file.\n");
+        fclose(librecord);
+        fclose(tempLib);
+        remove("fp2.txt");
+        return;
+    }
+
     while (fscanf(librecord, "%d %s %s %d",
                   &book.bid, book.bname, book.author, &book.status) == 4)
     {
         if (strcmp(issubookname, book.bname) == 0)
         {
-            book.status = 0; // Mark as issued
+            book.status = 0; // Mark book as issued
+            // Add correct book details to issuedbooks.txt
+            fprintf(issuedBooks, "%d\t%d\t%s\t%s\n",
+                    mid, book.bid, book.bname, book.author);
         }
         fprintf(tempLib, "%d\t%s\t%s\t%d\n",
                 book.bid, book.bname, book.author, book.status);
     }
     fclose(librecord);
     fclose(tempLib);
+    fclose(issuedBooks);
 
     // Replace original files with updated ones
     remove("librecord.txt");
@@ -470,13 +497,14 @@ void Issue()
     remove("membrrecord.txt");
     rename("fp2.txt", "membrrecord.txt");
 
-    printf("('') Book Successfully Issued!\n");
+    printf("\n('') Book Successfully Issued!\n");
 }
 
-void bookret()
-{
+void bookReturn() {
     int mid, Found1 = 0, Found2 = 0;
     char retbookname[50];
+    FILE *issuedBooksFile, *tempIssuedBooks;
+    int foundRecord = 0;
 
     // Get member ID
     printf("\nEnter the User ID of the Member:\n");
@@ -484,66 +512,56 @@ void bookret()
 
     // Check if member exists
     membrrecord = fopen("membrrecord.txt", "r");
-    if (membrrecord == NULL)
-    {
+    if (membrrecord == NULL) {
         printf("! Error: Member record file is empty or cannot be opened.\n");
         return;
     }
 
     // Search for member
-    while (fscanf(membrrecord, "%d %s %s %d %d",
-                  &membr.mid, membr.mname, membr.department, &membr.phno, &membr.availibcard) == 5)
-    {
-        if (mid == membr.mid)
-        {
+    while (fscanf(membrrecord, "%d %s %s %d %d", 
+                  &membr.mid, membr.mname, membr.department, &membr.phno, &membr.availibcard) == 5) {
+        if (mid == membr.mid) {
             Found1 = 1;
             break;
         }
     }
     fclose(membrrecord);
 
-    if (!Found1)
-    {
+    if (!Found1) {
         printf("! Invalid User ID.\n");
         return;
     }
 
-    if (membr.availibcard >= 5)
-    {
+    if (membr.availibcard >= 5) {
         printf("! Error: Member has already returned all books.\n");
         return;
     }
 
     // Get book name
     printf("\nEnter the Name of the Book:\n");
-    scanf(" %[^\n]", retbookname);
+    scanf(" %[^\n]", retbookname);  // Notice the space before %[^\n] to allow multi-word inputs
 
     // Check if book exists and is issued
     librecord = fopen("librecord.txt", "r");
-    if (librecord == NULL)
-    {
+    if (librecord == NULL) {
         printf("! Error: Library record file cannot be opened.\n");
         return;
     }
 
     // Create temporary file for library records
     FILE *tempLib = fopen("fp1.txt", "w");
-    if (tempLib == NULL)
-    {
+    if (tempLib == NULL) {
         printf("! Error: Unable to create temporary file.\n");
         fclose(librecord);
         return;
     }
 
     // Search for book and update its status
-    while (fscanf(librecord, "%d %s %s %d",
-                  &book.bid, book.bname, book.author, &book.status) == 4)
-    {
-        if (strcmp(retbookname, book.bname) == 0)
-        {
+    while (fscanf(librecord, "%d %s %s %d", 
+                  &book.bid, book.bname, book.author, &book.status) == 4) {
+        if (strcmp(retbookname, book.bname) == 0) {
             Found2 = 1;
-            if (book.status == 1)
-            {
+            if (book.status == 1) {
                 printf("! Error: Book is already in stock.\n");
                 fclose(librecord);
                 fclose(tempLib);
@@ -558,8 +576,7 @@ void bookret()
     fclose(librecord);
     fclose(tempLib);
 
-    if (!Found2)
-    {
+    if (!Found2) {
         printf("! Error: Book not found in library records.\n");
         remove("fp1.txt");
         return;
@@ -567,22 +584,19 @@ void bookret()
 
     // Update member record
     FILE *tempMembr = fopen("fp2.txt", "w");
-    if (tempMembr == NULL)
-    {
+    if (tempMembr == NULL) {
         printf("! Error: Unable to create temporary member file.\n");
         remove("fp1.txt");
         return;
     }
 
     membrrecord = fopen("membrrecord.txt", "r");
-    while (fscanf(membrrecord, "%d %s %s %d %d",
-                  &membr.mid, membr.mname, membr.department, &membr.phno, &membr.availibcard) == 5)
-    {
-        if (mid == membr.mid)
-        {
+    while (fscanf(membrrecord, "%d %s %s %d %d", 
+                  &membr.mid, membr.mname, membr.department, &membr.phno, &membr.availibcard) == 5) {
+        if (mid == membr.mid) {
             membr.availibcard++; // Increment available cards
         }
-        fprintf(tempMembr, "%d\t%s\t%s\t%d\t%d\n",
+        fprintf(tempMembr, "%d\t%s\t%s\t%d\t%d\n", 
                 membr.mid, membr.mname, membr.department, membr.phno, membr.availibcard);
     }
     fclose(membrrecord);
@@ -594,8 +608,108 @@ void bookret()
     remove("membrrecord.txt");
     rename("fp2.txt", "membrrecord.txt");
 
-    printf("('') Book Successfully Returned...\n");
+    // Handle issued books file: Remove the issued book record
+    issuedBooksFile = fopen("issuedbooks.txt", "r");
+    if (issuedBooksFile == NULL) {
+        printf("! Error: Issued books file cannot be opened.\n");
+        return;
+    }
+
+    tempIssuedBooks = fopen("fp3.txt", "w");
+    if (tempIssuedBooks == NULL) {
+        printf("! Error: Unable to create temporary file for issued books.\n");
+        fclose(issuedBooksFile);
+        return;
+    }
+
+    // Remove the issued book record from the file
+    while (fscanf(issuedBooksFile, "%d\t%d\t%s\t%s\n", 
+                  &mid, &book.bid, book.bname, book.author) == 4) {
+        if (mid == membr.mid && strcmp(book.bname, retbookname) == 0) {
+            foundRecord = 1; // Found the record to remove
+        } else {
+            fprintf(tempIssuedBooks, "%d\t%d\t%s\t%s\n", 
+                    mid, book.bid, book.bname, book.author);
+        }
+    }
+
+    fclose(issuedBooksFile);
+    fclose(tempIssuedBooks);
+
+    if (foundRecord) {
+        // Replace original issued books file with the updated one
+        remove("issuedbooks.txt");
+        rename("fp3.txt", "issuedbooks.txt");
+        printf("Book Successfully Returned...\n");
+    } else {
+        printf("! Error: No record of this book being issued to the member.\n");
+        remove("fp3.txt");
+    }
 }
+
+void DisplayIssuedBooks()
+{
+    FILE *issuedBooks;
+    char buffer[200]; // Buffer to read lines from the file
+
+    // Open the issued books file
+    issuedBooks = fopen("issuedbooks.txt", "r");
+    if (issuedBooks == NULL)
+    {
+        printf("! Error: No issued books record found.\n");
+        return;
+    }
+
+    printf("\n--- Issued Books Details ---\n");
+
+    // Read and print each line of the file
+    while (fgets(buffer, sizeof(buffer), issuedBooks) != NULL)
+    {
+        printf("%s", buffer);
+    }
+
+    fclose(issuedBooks);
+    printf("\n--- End of List ---\n");
+}
+// void ShowBooksIssuedByMember() {
+//     int memberId;
+//     int issuedMemberId, bookId;
+//     char bookName[50], author[50];
+//     int found = 0;
+
+//     // Prompt the user for Member ID
+//     printf("Enter the Member ID to check issued books: ");
+//     scanf("%d", &memberId);
+
+//     // Open the issued books file
+//     FILE *issuedBooksFile = fopen("issuedbooks.txt", "r");
+//     if (issuedBooksFile == NULL) {
+//         printf("! Error: Issued books file cannot be opened or does not exist.\n");
+//         return;
+//     }
+
+//     printf("\nBooks issued to Member ID %d:\n", memberId);
+//     printf("--------------------------------------------------\n");
+
+    
+//     // Rewind the file to start checking for the Member ID
+//     rewind(issuedBooksFile);
+
+//     // Read through the file and display books issued to the given Member ID
+//     while (fscanf(issuedBooksFile, "%d %d %[^\t] %[^\n]", &issuedMemberId, &bookId, bookName, author) == 4) {
+//         if (issuedMemberId == memberId) {
+//             found = 1;
+//             printf("Book ID: %d\tBook Name: %s\tAuthor: %s\n", bookId, bookName, author);
+//         }
+//     }
+
+
+//       fclose(issuedBooksFile);
+//     if (!found) {
+//         printf("No books issued to Member ID %d.\n", memberId);
+//     }
+// }
+
 
 void Exit()
 {
